@@ -131,9 +131,28 @@ var RootCmd = &cobra.Command{
 			}
 		}
 
-		// Expose metrics on /metrics using prometheus
+		// Enable metrics endpoint
 		if viper.GetBool("metrics.enabled") {
-			r.Any("/metrics", echo.WrapHandler(promhttp.Handler()))
+			// Expose metrics on custom listen port
+			if viper.IsSet("metrics.listen") {
+				metricsHandler := echo.New()
+				metricsAddr := viper.GetString("metrics.listen")
+				metricsHandler.Any("/metrics", echo.WrapHandler(promhttp.Handler()))
+				// Setup http server for metrics listen
+				metricsServer := &http.Server{
+					Handler: metricsHandler,
+					Addr:    metricsAddr,
+				}
+				go func() {
+					log.Infof("Start mertics server on %s", metricsServer.Addr)
+					if err := metricsServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+						log.Fatal(err)
+					}
+				}()
+			} else {
+				// Expose metrics on /metrics using prometheus
+				r.Any("/metrics", echo.WrapHandler(promhttp.Handler()))
+			}
 		}
 		r.Any("/", func(ctx echo.Context) error {
 			return ctx.NoContent(http.StatusOK)
